@@ -4,4 +4,3 @@
 const char* version() {
     return PROJECT_VERSION;  // Возвращает строку с версией
 }
- 
