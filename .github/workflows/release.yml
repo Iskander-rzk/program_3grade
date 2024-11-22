@@ -8,18 +8,36 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest] # Указываем, на каких ОС выполнять сборку
+    runs-on: ${{ matrix.os }}
     permissions: write-all
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+
+      # Устанавливаем зависимости для Linux и macOS
+      - name: Install dependencies
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            sudo apt-get update && sudo apt-get install libboost-test-dev -y
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            brew update && brew install boost
+          fi
+
+      # Выполняем сборку
       - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
       - run: cmake --build .
       - run: cmake --build . --target test
+
+      # Создаем пакет (опционально)
       - run: cmake --build . --target package
+
+      # Создаем релиз только для Linux (можно расширить для macOS)
       - name: Create Release
+        if: ${{ matrix.os == 'ubuntu-latest' }} # Создаем релиз только на Linux
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -29,7 +47,10 @@ jobs:
           release_name: Release ${{ github.run_number }}
           draft: false
           prerelease: false
+
+      # Загрузка артефакта для релиза (Linux)
       - name: Upload Release Asset
+        if: ${{ matrix.os == 'ubuntu-latest' }} # Загружаем артефакт только для Linux
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
