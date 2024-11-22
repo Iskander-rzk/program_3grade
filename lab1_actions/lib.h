@@ -1,3 +1,4 @@
+// lib.h
 #pragma once
 
-int version();
+const char* version();  // Изменено на const char*
