@@ -19,7 +19,7 @@ std::tuple<int, int, int, int> parse_ip_adress(std::string str)
     std::getline(ip_stream, str, '.');
     n3 = std::stoi(str);
     std::getline(ip_stream, str, '.');
-    n4 = std::stoi(str); 
+    n4 = std::stoi(str);
 
     return std::make_tuple(n1, n2, n3, n4);
 
