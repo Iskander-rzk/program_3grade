@@ -15,42 +15,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Клонирование репозитория
       - uses: actions/checkout@v3
         with:
           submodules: true
 
-      # Установка зависимостей
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libboost-test-dev
 
-      # Конфигурация проекта с CMake
       - name: Configure with CMake
         run: |
           cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
 
-      # Сборка проекта
       - name: Build the project
         run: |
           cmake --build build
 
-      # Тестирование
       - name: Run tests
         run: |
           cmake --build build --target test
 
-      # Создание пакета
       - name: Create package
         run: |
           cmake --build build --target package
 
-      # Проверка содержимого сборочной директории
       - name: Debug build directory
         run: ls -R build
 
-      # Загрузка артефакта
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
@@ -62,42 +54,34 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      # Клонирование репозитория
       - uses: actions/checkout@v3
         with:
           submodules: true
 
-      # Установка зависимостей
       - name: Install dependencies
         run: |
           brew update
           brew install boost
 
-      # Конфигурация проекта с CMake
       - name: Configure with CMake
         run: |
           cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
 
-      # Сборка проекта
       - name: Build the project
         run: |
           cmake --build build
 
-      # Тестирование
       - name: Run tests
         run: |
           cmake --build build --target test
 
-      # Создание пакета
       - name: Create package
         run: |
           cmake --build build --target package
 
-      # Проверка содержимого сборочной директории
       - name: Debug build directory
         run: ls -R build
 
-      # Загрузка артефакта
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
@@ -112,25 +96,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Скачивание артефактов Linux
       - name: Download Linux artifact
         uses: actions/download-artifact@v3
         with:
           name: linux-artifact
           path: ./artifacts
 
-      # Скачивание артефактов macOS
       - name: Download macOS artifact
         uses: actions/download-artifact@v3
         with:
           name: macos-artifact
           path: ./artifacts
 
-      # Проверка скачанных файлов
       - name: Debug downloaded artifacts
         run: ls -R ./artifacts
 
-      # Создание релиза
       - name: Create unified release
         id: create_release
         uses: actions/create-release@v1
@@ -142,17 +122,22 @@ jobs:
           draft: false
           prerelease: false
 
-      # Загрузка всех артефактов в релиз
-      - name: Upload all artifacts
+      - name: Upload Linux artifact to release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: |
-            ./artifacts/helloworld-0.0.${{ github.run_number }}-Linux.deb
-            ./artifacts/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
-          asset_name: |
-            helloworld-0.0.${{ github.run_number }}-Linux.deb
-            helloworld-0.0.${{ github.run_number }}-Darwin.dmg
-          asset_content_type: application/octet-stream
+          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload macOS artifact to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_name: helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_content_type: application/x-apple-diskimage
