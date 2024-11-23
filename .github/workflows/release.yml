@@ -15,72 +15,94 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Клонирование репозитория
       - uses: actions/checkout@v3
         with:
           submodules: true
 
+      # Установка зависимостей
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libboost-test-dev
 
+      # Конфигурация проекта с CMake
       - name: Configure with CMake
         run: |
-          cmake . -DPATCH_VERSION=${{ github.run_number }}
+          cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
 
+      # Сборка проекта
       - name: Build the project
         run: |
-          cmake --build .
+          cmake --build build
 
+      # Тестирование
       - name: Run tests
         run: |
-          cmake --build . --target test
+          cmake --build build --target test
 
+      # Создание пакета
       - name: Create package
         run: |
-          cmake --build . --target package
+          cmake --build build --target package
 
+      # Проверка содержимого сборочной директории
+      - name: Debug build directory
+        run: ls -R build
+
+      # Загрузка артефакта
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: linux-artifact
-          path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
+          path: build/helloworld-0.0.${{ github.run_number }}-Linux.deb
 
   # Сборка для macOS
   build-macos:
     runs-on: macos-latest
 
     steps:
+      # Клонирование репозитория
       - uses: actions/checkout@v3
         with:
           submodules: true
 
+      # Установка зависимостей
       - name: Install dependencies
         run: |
           brew update
           brew install boost
 
+      # Конфигурация проекта с CMake
       - name: Configure with CMake
         run: |
-          cmake . -DPATCH_VERSION=${{ github.run_number }}
+          cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
 
+      # Сборка проекта
       - name: Build the project
         run: |
-          cmake --build .
+          cmake --build build
 
+      # Тестирование
       - name: Run tests
         run: |
-          cmake --build . --target test
+          cmake --build build --target test
 
+      # Создание пакета
       - name: Create package
         run: |
-          cmake --build . --target package
+          cmake --build build --target package
 
+      # Проверка содержимого сборочной директории
+      - name: Debug build directory
+        run: ls -R build
+
+      # Загрузка артефакта
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: macos-artifact
-          path: ./helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          path: build/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
 
   # Создание релиза
   release:
@@ -90,18 +112,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Скачивание артефактов Linux
       - name: Download Linux artifact
         uses: actions/download-artifact@v3
         with:
           name: linux-artifact
           path: ./artifacts
 
+      # Скачивание артефактов macOS
       - name: Download macOS artifact
         uses: actions/download-artifact@v3
         with:
           name: macos-artifact
           path: ./artifacts
 
+      # Проверка скачанных файлов
+      - name: Debug downloaded artifacts
+        run: ls -R ./artifacts
+
+      # Создание релиза
       - name: Create unified release
         id: create_release
         uses: actions/create-release@v1
@@ -113,6 +142,7 @@ jobs:
           draft: false
           prerelease: false
 
+      # Загрузка всех артефактов в релиз
       - name: Upload all artifacts
         uses: actions/upload-release-asset@v1
         env:
