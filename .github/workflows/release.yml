@@ -1,88 +1,128 @@
-name: 'C++ CI'  # Название рабочего процесса
+name: 'C++ CI'
 
 on:
-  push:  # Запускает процесс при событии push
+  push:
     branches:
-      - main  # Для ветки main
-      - feature/github_actions  # Для веток с названием feature/github_actions
+      - main
+      - feature/github_actions
 
 permissions:
-  contents: write  # Права на запись в репозиторий
+  contents: write
 
 jobs:
-  build:  # Определение задачи сборки
-    strategy:
-      matrix:  # Использует матрицу для запуска на нескольких ОС
-        os: [ubuntu-latest, macos-latest]  # Указывает, что задача будет выполняться на Ubuntu и macOS
-    runs-on: ${{ matrix.os }}  # Запускает задачу на ОС, указанной в матрице
+  # Сборка для Linux
+  build-linux:
+    runs-on: ubuntu-latest
 
-    steps:  # Шаги выполнения задачи
-      - uses: actions/checkout@v3  # Проверяет код репозитория
-        with:
-          submodules: true  # Включает подмодули при проверке
-
-      - name: Install dependencies on Linux  # Установка зависимостей для Linux
-        if: ${{ runner.os == 'Linux' }}  # Условие для выполнения только на Linux
-        run: |  # Выполняет следующие команды в оболочке
-          sudo apt-get update  # Обновляет список пакетов
-          sudo apt-get install -y libboost-test-dev  # Устанавливает библиотеку Boost Test
-
-      - name: Install dependencies on macOS  # Установка зависимостей для macOS
-        if: ${{ runner.os == 'macOS' }}  # Условие для выполнения только на macOS
-        run: |  
-          brew update  # Обновляет Homebrew
-          brew install boost  # Устанавливает библиотеку Boost
-
-      - name: Configure with CMake  # Конфигурация проекта с помощью CMake
-        run: |  
-          cmake . -DPATCH_VERSION=${{ github.run_number }}  # Запускает CMake с указанием версии патча
-
-      - name: Build the project  # Сборка проекта
-        run: |  
-          cmake --build .  # Строит проект с помощью CMake
-
-      - name: Run tests  # Запуск тестов проекта
-        run: |  
-          cmake --build . --target test  # Запускает тесты, определенные в CMake
-
-      - name: Create package  # Создание пакета для распространения
-        run: |  
-          cmake --build . --target package  # Создает пакет (например, .deb или .dmg)
-
-  create_release:  # Задача для создания релиза
-    runs-on: ubuntu-latest  # Запускает на Ubuntu
-    needs: build  # Зависит от завершения задачи build
     steps:
-      - name: Create Release  # Создание релиза
-        id: create_release  # Уникальный идентификатор для этого шага
-        uses: actions/create-release@v1  # Использует действие для создания релиза на GitHub
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Токен доступа к GitHub из секретов репозитория
+      - uses: actions/checkout@v3
         with:
-          tag_name: "release-${{ github.run_number }}"  # Имя тега релиза
-          release_name: "Release ${{ github.run_number }}"  # Название релиза
-          draft: false  # Не создавать черновик релиза
-          prerelease: false  # Не делать предварительный релиз
+          submodules: true
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-test-dev
 
-      - name: Upload Release Asset (Linux)  # Загрузка артефакта релиза для Linux
-        if: ${{ runner.os == 'ubuntu-latest' }}  # Условие для выполнения только на Linux
-        uses: actions/upload-release-asset@v1  
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
+      - name: Configure with CMake
+        run: |
+          cmake . -DPATCH_VERSION=${{ github.run_number }}
+
+      - name: Build the project
+        run: |
+          cmake --build .
+
+      - name: Run tests
+        run: |
+          cmake --build . --target test
+
+      - name: Create package
+        run: |
+          cmake --build . --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}  
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb  
-          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb  
-          asset_content_type: application/vnd.debian.binary-package  
+          name: linux-artifact
+          path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
 
-      - name: Upload Release Asset (macOS)  # Загрузка артефакта релиза для macOS 
-        if: ${{ runner.os == 'macos-latest' }}  
-        uses: actions/upload-release-asset@v1  
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
+  # Сборка для macOS
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}  
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Darwin.dmg  
-          asset_name: helloworld-0.0.${{ github.run_number }}-Darwin.dmg  
-          asset_content_type: application/x-apple-diskimage
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install boost
+
+      - name: Configure with CMake
+        run: |
+          cmake . -DPATCH_VERSION=${{ github.run_number }}
+
+      - name: Build the project
+        run: |
+          cmake --build .
+
+      - name: Run tests
+        run: |
+          cmake --build . --target test
+
+      - name: Create package
+        run: |
+          cmake --build . --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-artifact
+          path: ./helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+
+  # Создание релиза
+  release:
+    needs:
+      - build-linux
+      - build-macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-artifact
+          path: ./artifacts
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: macos-artifact
+          path: ./artifacts
+
+      - name: Create unified release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "release-${{ github.run_number }}"
+          release_name: "Release ${{ github.run_number }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload all artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: |
+            ./artifacts/helloworld-0.0.${{ github.run_number }}-Linux.deb
+            ./artifacts/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_name: |
+            helloworld-0.0.${{ github.run_number }}-Linux.deb
+            helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_content_type: application/octet-stream
