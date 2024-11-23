@@ -60,3 +60,32 @@ jobs:
           asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
+
+
+          
+
+         # Создаем релиз только для Linux (можно расширить для macOS)
+      - name: Create Release
+        if: ${{ matrix.os == 'macos-latest' }} # Создаем релиз только на macos
+        id: create_release_macos
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+      # Загрузка артефакта для релиза (Linux)
+      - name: Upload Release Asset
+        if: ${{ matrix.os == 'macos-latest' }} # Загружаем артефакт только для macos
+        id: upload-release-asset_macos
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./helloworld-0.0.${{ github.run_number }}-macos.deb
+          asset_name: helloworld-0.0.${{ github.run_number }}-macos.deb
+          asset_content_type: application/vnd.debian.binary-package
