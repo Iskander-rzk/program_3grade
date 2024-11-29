@@ -3,60 +3,163 @@ name: 'C++ CI'
 on:
   push:
     branches:
-      - lab2
+      - main
       - feature/github_actions
 
+permissions:
+  contents: write
+
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest] # Указываем, на каких ОС выполнять сборку
-    runs-on: ${{ matrix.os }}
-    permissions: write-all
+  # Сборка для Linux
+  build-linux:
+    runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
 
-      # Устанавливаем зависимости для Linux и macOS
       - name: Install dependencies
         run: |
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            sudo apt-get update && sudo apt-get install libboost-test-dev -y
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            brew update && brew install boost
-          fi
+          sudo apt-get update
+          sudo apt-get install -y libboost-test-dev
 
-      # Выполняем сборку
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - run: cmake --build .
-      - run: cmake --build . --target test
+      - name: Configure with CMake
+        run: |
+          cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
 
-      # Создаем пакет (опционально)
-      - run: cmake --build . --target package
+      - name: Build the project
+        run: |
+          cmake --build build
 
-      # Создаем релиз только для Linux (можно расширить для macOS)
-      - name: Create Release
-        if: ${{ matrix.os == 'ubuntu-latest' }} # Создаем релиз только на Linux
+      - name: Run tests
+        run: |
+          cmake --build build --target test
+
+      - name: Create package
+        run: |
+          cmake --build build --target package
+
+      - name: Debug build directory
+        run: ls -R build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-artifact
+          path: build/helloworld-0.0.${{ github.run_number }}-Linux.deb
+
+  # Сборка для macOS
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install boost
+
+      - name: Configure with CMake
+        run: |
+          cmake -Bbuild -H. -DPATCH_VERSION=${{ github.run_number }}
+
+      - name: Build the project
+        run: |
+          cmake --build build
+
+      - name: Run tests
+        run: |
+          cmake --build build --target test
+
+      - name: Create package
+        run: |
+          cmake --build build --target package
+
+      - name: Debug build directory
+        run: ls -R build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-artifact
+          path: build/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+
+  # Создание релиза
+  release:
+    needs:
+      - build-linux
+      - build-macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-artifact
+          path: ./artifacts
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: macos-artifact
+          path: ./artifacts
+
+      - name: Debug downloaded artifacts
+        run: ls -R ./artifacts
+
+      - name: Create unified release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.run_number }}
-          release_name: Release ${{ github.run_number }}
+          tag_name: "release-${{ github.run_number }}"
+          release_name: "Release ${{ github.run_number }}"
           draft: false
           prerelease: false
 
-      # Загрузка артефакта для релиза (Linux)
-      - name: Upload Release Asset
-        if: ${{ matrix.os == 'ubuntu-latest' }} # Загружаем артефакт только для Linux
-        id: upload-release-asset
+      - name: Upload Linux artifact to release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload macOS artifact to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_name: helloworld-0.0.${{ github.run_number }}-Darwin.dmg
+          asset_content_type: application/x-apple-diskimage
+
+  # Пуш изменений в ветку lab2
+  push-to-lab2:
+    needs:
+      - release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Ensure we are on lab2 branch
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "bot@example.com"
+          git fetch origin lab2 || echo "lab2 branch does not exist, creating new branch."
+          git checkout lab2 || git checkout -b lab2
+
+      - name: Sync changes to lab2 branch
+        run: |
+          git add .
+          git commit -m "Sync changes from main to lab2" || echo "No changes to commit"
+          git push origin lab2
